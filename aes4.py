@@ -76,21 +76,59 @@ def AES(text, key, rounds):
                 msb_set = a & 0x80
                 a = a << 1
                 if msb_set:
-                    a = a ^ 0x1B
+                    a = a ^ 0x1b
                 b = b >> 1
             return p & 0xFF
 
-        matrix = (2, 3, 1, 1, 1, 2, 3, 1, 1, 1, 2, 3, 3, 1, 1, 2)
-        for i in range(4, 4):
-            text[i: i + 4] = \
-                galois_mult(text[i], matrix[i]) ^ \
-                galois_mult(text[i + 1], matrix[i + 1]) ^ \
-                galois_mult(text[i + 2], matrix[i + 2]) ^ \
-                galois_mult(text[i + 3], matrix[i + 3])
+        gm = galois_mult
 
-    def add_round_key(text, round):
-        pass
+        ret = []
+        for i in range(0, len(text), 4):
+            ret.append(gm(text[i], 2) ^ gm(text[i + 1], 3) ^ \
+                       text[i + 2] ^ text[i + 3])
+            ret.append(text[i] ^ gm(text[i + 1], 2) ^ \
+                       gm(text[i + 2], 3) ^ text[i + 3])
+            ret.append(text[i] ^ text[i + 1] ^ \
+                       gm(text[i + 2], 2) ^ gm(text[i + 3], 3))
+            ret.append(gm(text[i], 3) ^ text[i + 1] ^ \
+                       text[i + 2] ^ gm(text[i + 3], 2))
 
+        return bytearray(ret)
+
+    def add_round_key(text, key):
+        ret = []
+        for i, byte in enumerate(text):
+            ret.append(byte ^ key[i])
+        return ret
+
+    def expand_key(key):
+        def schedule_core(t, rcon_iter):
+            ret, word = [], rotate(t, 1)
+            for byte in word:
+                ret.append(sbox[byte])
+
+            word[0] ^= rcon[rcon_iter]
+            return word
+
+
+        # expanded key and current length through algorithm
+        expanded, curr_len = bytearray(key), 32
+        rcon_iter = 1
+
+        while curr_len < 240:
+            t = expanded[-4:]
+
+            if curr_len % 32 == 0:
+                t = schedule_core(t, rcon_iter)
+                rcon_iter += 1
+
+            for i in range(4):
+                expanded.append(expanded[curr_len - 32] ^ t[i])
+                curr_len += 1
+
+        return expanded
+
+    cipher, expanded_key = bytearray(), expand_key(key)
     for chunk in chunks(text):
         chunk = add_round_key(chunk, expanded[:16])
         for key_i in range(1, rounds * 16, 16):
@@ -99,3 +137,6 @@ def AES(text, key, rounds):
 
         chunk = shift_row(sub_bytes(chunk))
         chunk = add_round_key(chunk, expanded_key[rounds * 16:rounds * 16 + 16])
+        cipher.extend(chunk)
+
+    return cipher
