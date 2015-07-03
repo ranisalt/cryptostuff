@@ -2,7 +2,7 @@ import itertools
 from utils import gcd, poly_mul
 
 
-def AES(text, key, rounds):
+def AES128(text, key, rounds):
     if not isinstance(text, bytearray):
         text = bytearray(text.encode())
 
@@ -130,7 +130,7 @@ def AES(text, key, rounds):
 
     cipher, expanded_key = bytearray(), expand_key(key)
     for chunk in chunks(text):
-        chunk = add_round_key(chunk, expanded[:16])
+        chunk = add_round_key(chunk, expanded_key[:16])
         for key_i in range(1, rounds * 16, 16):
             chunk = mix_column(shift_row(sub_bytes(chunk)))
             chunk = add_round_key(chunk, expanded_key[key_i:key_i + 16])
