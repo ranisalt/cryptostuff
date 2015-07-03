@@ -1,5 +1,5 @@
 import itertools
-from utils import gcd
+from utils import gcd, poly_mul
 
 
 def AES(text, key, rounds):
@@ -51,16 +51,23 @@ def AES(text, key, rounds):
             yield orig[i:i + width]
             i += width
 
-    def sub_bytes(text, round):
-        for i, byte in enumerate(text):
-            text[i] = sbox[ord(byte)]
+    def rotate(arr, n):
+        return arr[n:] + arr[:n]
 
-    def shift_row(text, round):
-        text[4:8] = text[5:8] + text[4:5]
-        text[8:12] = text[10:12] + text[8:10]
-        text[12:16] = text[15:16] + text[12:15]
+    def sub_bytes(text):
+        ret = []
+        for byte in text:
+            ret.append(sbox[ord(byte)])
+        return ret
 
-    def mix_column(text, round):
+    def shift_row(text):
+        ret = text[:]
+        ret[4:8] = rotate(text[4:8], 1)
+        ret[8:12] = rotate(text[8:12], 2)
+        ret[12:16] = rotate(text[12:16], 3)
+        return ret
+
+    def mix_column(text):
         def galois_mult(a, b):
             p, msb_set = 0, 0
             for i in range(8):
@@ -85,12 +92,10 @@ def AES(text, key, rounds):
         pass
 
     for chunk in chunks(text):
-        add_round_key(chunk, 0)
-        for round in range(1, rounds):
-            sub_bytes(chunk, round)
-            shift_row(chunk, round)
-            mix_column(chunk, round)
-            add_round_key(chunk, round)
-        sub_bytes(chunk, rounds)
-        shift_row(chunk, rounds)
-        add_round_key(chunk, rounds)
+        chunk = add_round_key(chunk, expanded[:16])
+        for key_i in range(1, rounds * 16, 16):
+            chunk = mix_column(shift_row(sub_bytes(chunk)))
+            chunk = add_round_key(chunk, expanded_key[key_i:key_i + 16])
+
+        chunk = shift_row(sub_bytes(chunk))
+        chunk = add_round_key(chunk, expanded_key[rounds * 16:rounds * 16 + 16])
